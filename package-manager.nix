@@ -26,7 +26,7 @@ in
 module-description:
 let
   fstar-factory = (import ./factory.nix) pkgs;
-  fstar = if m.force-fstar-version == false
+  fstar-bin = if m.force-fstar-version == false
           then fstar
           else
             if builtins.typeOf m.force-fstar-version == "lambda"
@@ -57,7 +57,6 @@ let
       use_extracted_interfaces ? false,
       include                  ? [],
       load                     ? [],
-      fstar-bin                ? fstar,
       record_hints             ? false,
       use_hints                ? false,
       cache_checked_modules    ? false,
@@ -89,7 +88,7 @@ all = {
       # then
         [ (symlinkJoin {
           name = "fstar-include-wrapper-" + m.name;
-          paths = [ fstar ];
+          paths = [ fstar-bin ];
           buildInputs = [ makeWrapper ];
           postBuild = ''
           wrapProgram $out/bin/fstar.exe \
@@ -100,7 +99,7 @@ all = {
         ''; 
         })]
     );
-    nativeBuildInputs = [ fstar ] ++
+    nativeBuildInputs = [ fstar-bin ] ++
                         ( if builtins.length m.compile == 0
                           then []
                           else (with ocamlPackages;
@@ -136,7 +135,7 @@ all = {
             
             cd ${odir}
             source ${ocamlPackages.findlib.setupHook}
-            addOCamlPath ${fstar}
+            addOCamlPath ${fstar-bin}
             ${builtins.concatStringsSep "\n"
               ( map ({ module, assets, binary-name, library-name, extra-no-extract,
                        extra-fstar-flags, extra-ocaml-libraries, extra-ocaml-flags
@@ -162,7 +161,15 @@ all = {
           cp -r bin/* $out/bin
           cp ${odir}/*.ml $out/ocaml/
           chmod +x $out/bin
-          ${builtins.concatStringsSep "\n" (map (copyFile "$out/") (map (x: x + ".fst") m.sources))} 
+          ${builtins.concatStringsSep "\n"
+            (map
+              (f:
+                let fst  = copyFile "$out/"  f;     
+                    fsti = copyFile "$out/" (f+"i");
+                in ''(${fst} && (${fsti} || true)) || ${fsti}''
+              )
+              (map (x: x + ".fst") m.sources))
+           } 
           ${builtins.concatStringsSep "\n" (map (copyFile "$out/") m.ocaml-sources)}
         ''
       );
