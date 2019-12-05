@@ -20,18 +20,26 @@ let
       compile = map (x: default-compile-description // x) compile;
       extra-fstar-flags = [];
       skipVerification = false;
-      force-fstar-version = false;
+      force-fstar-version = true;
+      # if force-fstar-version is false, use fstar from pkgs
+      # if force-fstar-version is true, use fstar from ./default.nix
+      # if force-fstar-version is a lambda, use `force-fstar-version factory`, with factory being the one described in ./factory.nix
+      # otherwise, use directly `force-fstar-version` as fstar
     };
 in
 module-description:
 let
+  fstar-default = ((import ./default.nix) pkgs pkgs).fstar;
   fstar-factory = (import ./factory.nix) pkgs;
   fstar-bin = if m.force-fstar-version == false
-          then fstar
-          else
-            if builtins.typeOf m.force-fstar-version == "lambda"
-            then m.force-fstar-version fstar-factory 
-            else m.force-fstar-version;
+              then fstar
+              else
+                if m.force-fstar-version == true
+                then fstar-default
+                else
+                  if builtins.typeOf m.force-fstar-version == "lambda"
+                  then m.force-fstar-version fstar-factory 
+                  else m.force-fstar-version;
   compute-includes = m:
         m.includes
      ++ lib.flatten (map compute-includes m.includes)
@@ -80,13 +88,8 @@ let
              s_use_extracted_interfaces others s_cache_checked_modules]
           );
         in ''${fstar-bin}/bin/fstar.exe ${flags}'';
-all = {
-  lib = stdenv.mkDerivation rec {
-    name = "fstar-lib-" + m.name;
-    buildInputs = (
-      # if lib.inNixShell
-      # then
-        [ (symlinkJoin {
+all = rec {
+  wrapped-fstar = (symlinkJoin {
           name = "fstar-include-wrapper-" + m.name;
           paths = [ fstar-bin ];
           buildInputs = [ makeWrapper ];
@@ -97,7 +100,13 @@ all = {
             }"
           ln -s $out/bin/fstar.exe $out/bin/fstar.wrapped
         ''; 
-        })]
+        });
+  lib = stdenv.mkDerivation rec {
+    name = "fstar-lib-" + m.name;
+    buildInputs = (
+      # if lib.inNixShell
+      # then
+        [ wrapped-fstar ]
     );
     nativeBuildInputs = [ fstar-bin ] ++
                         ( if builtins.length m.compile == 0
@@ -128,8 +137,9 @@ all = {
             mkdir -p ${odir} bin lib
             ${extract_cmd}
             ${builtins.concatStringsSep "\n" (map (dep: ''
-            echo "Copying dependency: cp ${dep}/ocaml/*.ml ${odir}/"
-            cp ${dep}/ocaml/*.ml ${odir}/
+            for f in ${dep}/ocaml/*.ml; do
+               cp "$f" ${odir}/
+            done
             '') m.dependencies)}
             ${builtins.concatStringsSep "\n" (map (copyFile odir) m.ocaml-sources)}
             
@@ -158,8 +168,12 @@ all = {
     
     installPhase = (
         ''mkdir -p $out/bin $out/lib $out/ocaml
-          cp -r bin/* $out/bin
-          cp ${odir}/*.ml $out/ocaml/
+          for f in bin/*.ml; do 
+            cp -r $f $out/bin
+          done
+          for f in ${odir}/*.ml; do 
+            cp $f $out/ocaml/
+          done
           chmod +x $out/bin
           ${builtins.concatStringsSep "\n"
             (map
