@@ -42,6 +42,10 @@ stdenv.mkDerivation rec {
   postInstall = ''
     mkdir -p $out/ulib/; cp -rv ./ulib/ $out/
     wrapProgram $out/bin/fstar.exe --prefix PATH ":" "${lib.getBin z3}/bin"
+    
+    ln -s $out/lib/ocaml/${ocamlPackages.ocaml.version}/site-lib/fstar-tactics-lib  $out/bin/fstar-tactics-lib
+    ln -s $out/lib/ocaml/${ocamlPackages.ocaml.version}/site-lib/fstarlib           $out/bin/fstarlib
+    ln -s $out/lib/ocaml/${ocamlPackages.ocaml.version}/site-lib/fstar-compiler-lib $out/bin/fstar-compiler-lib
   '';
 
   meta = with stdenv.lib; {
