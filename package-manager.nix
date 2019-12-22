@@ -59,9 +59,6 @@ let
   translate-fst-module = builtins.replaceStrings ["."] ["_"];
   ocaml_packages = ["fstarlib" "fstar-tactics-lib" "fstar-compiler-lib"];
   copyFile = dest: file: ''cp --no-preserve=mode ${file} ${dest}/'';
-  ocaml-nix-dependencies = with ocamlPackages;
-    [ ocaml ocamlbuild findlib ppx_deriving
-      pprint ppx_deriving_yojson zarith stdint batteries];
   copyMlFiles = dirIn: dirOut: 
     ''for f in ${dirIn}/*.ml; do
         ${copyFile dirOut "$f"}
@@ -74,20 +71,6 @@ let
       ++ map (x: ''--extract "${x}"'') extract
       ++ map (x: ''--load "${x}"'') load
     );
-  wrapped-fstar-bin = (symlinkJoin {
-          name = "fstar-include-wrapper-" + m.name;
-          paths = [ fstar-bin ];
-          buildInputs = [ makeWrapper ] ++ ocaml-nix-dependencies;
-          postBuild = (
-            let s = ''
-          wrapProgram $out/bin/fstar.exe \
-            --run "env(){ shift; echo XXXXXX > /tmp/hey_tmp; \$@; }; addEnvHooks(){ :; }; source ${ocamlPackages.findlib.setupHook}; addOCamlPath ${fstar-bin}" \
-            --add-flags "${
-              (fstar-cli-lsts includes-closure [] [])
-            }"
-          ln -s $out/bin/fstar.exe $out/bin/fstar.wrapped
-        ''; in s); 
-  });
   fstar-cli =
     { codegen                  ? "",
       codegen-lib              ? "",
@@ -121,7 +104,20 @@ let
         in ''${fstar-bin}/bin/fstar.exe ${flags}'';
 all = rec {
   auto = if pkgs.lib.inNixShell then shell else build;
-  wrapped-fstar = wrapped-fstar-bin;
+  wrapped-fstar = (symlinkJoin {
+          name = "fstar-include-wrapper-" + m.name;
+          paths = [ fstar-bin ];
+          buildInputs = [ makeWrapper ];
+          postBuild = (
+            let s = ''
+          wrapProgram $out/bin/fstar.exe \
+            --run "addEnvHooks(){ :; }; source ${ocamlPackages.findlib.setupHook}; addOCamlPath ${fstar-bin}" \
+            --add-flags "${
+              (fstar-cli-lsts includes-closure [] [])
+            }"
+          ln -s $out/bin/fstar.exe $out/bin/fstar.wrapped
+        ''; in s); 
+  });
   shell = stdenv.mkDerivation {
     name = "fstar-shell-" + m.name;
     buildInputs = [
@@ -135,10 +131,14 @@ all = rec {
       # then
         [ wrapped-fstar ]
     );
-    nativeBuildInputs = [ pkgs.fstar pkgs.tree ] ++
-                        ( if builtins.length m.compile == 0
+    nativeBuildInputs = [ fstar-bin pkgs.tree ] ++
+                        ( if (  (builtins.length m.compile == 0)
+                             && (m.tactic-module == null)
+                             )
                           then []
-                          else ocaml-nix-dependencies
+                          else (with ocamlPackages;
+                            [ ocaml ocamlbuild findlib ppx_deriving
+                              pprint ppx_deriving_yojson zarith stdint batteries])
                         );
     src = m.sources-directory;
     sources = m.sources;
@@ -194,14 +194,10 @@ all = rec {
           echo "-> COMPILE TACTIC '${m.tactic-module}'"
           tree -a
           # cp *.ml 
-          echo "BEFORE"
-          echo "BEFORE"
-          echo "BEFORE"
-          echo "BEFORE"
-          echo "BEFORE"
-          echo "BEFORE"
-          # ocamlfind ocamlopt -shared -I . -package fstar-tactics-lib -o ./${translate-fst-module m.tactic-module}.cmxs ./${translate-fst-module m.tactic-module}.ml
+          # ocamlbuild -use-ocamlfind -cflag -g -package fstar-tactics-lib,fstar-compiler-lib ${translate-fst-module m.tactic-module}.cmxs
           ocamlbuild -use-ocamlfind -cflag -g -package fstar-tactics-lib ${translate-fst-module m.tactic-module}.cmxs
+          echo "HEY"
+          echo "HEY"
           echo "HEY"
           echo "HEY"
           echo "HEY"

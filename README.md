@@ -4,6 +4,8 @@ This repo furnishes a sort of basic F* package manager thanks to nix. It basical
 
 ## Example
 
+(TODO/WARNING: this example is out of date)
+
 ```nix
 let pkgs = import <nixpkgs> {} in
 (
@@ -52,7 +54,7 @@ Write down a `default.nix` (see the example above), and then `nix-build` in that
 Write down a `default.nix` (see the example above), and then `nix-shell` in that same folder. A new shell appears, in which `fstar.exe` (and/or `fstar.wrapped`) is a F* preconfigured with every dependencies in F*'s path.
 
 ## TODO
- - [ ] let a package provide tactics
+ - [x] let a package provide tactics
  - [ ] let a package have tactic dependencies
  - [ ] add kremlin compilation
  - [ ] unsafe tactic flag?
