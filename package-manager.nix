@@ -73,7 +73,7 @@ let
      ++ lib.flatten (map compute-includes includes)
   ;
   includes-closure
-  = unique (compute-includes {includes = m.dependencies; override = _: {includes = m.dependencies;};});
+  = unique (compute-includes {includes = map (d: d {nixpkgs = pkgs;}) m.dependencies; override = _: {includes = map (d: d {nixpkgs = pkgs;}) m.dependencies;};});
   modules-closure = unique (lib.flatten (map (m: m.sources) includes-closure) ++ m.sources);
   fstar-cli-lsts = include: extract: load:
     # let
@@ -170,7 +170,7 @@ all = rec {
                         );
     src = lib.cleanSource m.sources-directory;
     sources = m.sources;
-    includes = m.dependencies;
+    includes = map (d: d {nixpkgs = pkgs;}) m.dependencies;
     buildPhase =
       (
         let sources-modules = " " + builtins.concatStringsSep " " (map addFstExt m.sources);
@@ -192,7 +192,7 @@ all = rec {
 
         echo "## Copy OCaml dependencies"
         ${builtins.concatStringsSep "\n" (
-             map (dep: copyMlFiles (dep+"/"+ocaml-extract-path) ocaml-odir) m.dependencies # peer dependencies
+          map (dep: copyMlFiles (dep+"/"+ocaml-extract-path) ocaml-odir) (map (d: d {nixpkgs = pkgs;}) m.dependencies) # peer dependencies
           ++ map (copyFile ocaml-odir) m.ocaml-sources # raw OCaml dependencies
           ++ map (copyFile plugin-odir) m.ocaml-sources # raw OCaml dependencies
         )}

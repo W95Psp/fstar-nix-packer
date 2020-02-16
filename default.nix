@@ -9,7 +9,8 @@ rec {
     (super.writeScriptBin "fstar-package-init" ''
     #!${super.stdenv.shell}
     if [ ! -f ./fstar-package.nix ]; then
-      echo '{ name = "PackageName";' > ./fstar-package.nix
+      echo '{nixpkgs ? import <nixpkgs> {}}:' > ./fstar-package.nix
+      echo '{ name = "PackageName";' >> ./fstar-package.nix
       echo '  sources-directory = ./.;' >> ./fstar-package.nix
       echo '  sources = [' >> ./fstar-package.nix
       for f in *.fst; do echo "    \"$\{f%.*}\""  >> ./fstar-package.nix; done;
@@ -20,12 +21,12 @@ rec {
       echo '  compile = [];' >> ./fstar-package.nix
       echo '}' >> ./fstar-package.nix
     fi
-    echo "(import <nixpkgs> {}).fstar-package-manager.shell (import ./fstar-package.nix)" > shell.nix
-    echo "(import <nixpkgs> {}).fstar-package-manager.build (import ./fstar-package.nix)" > default.nix
+    echo "{nixpkgs ? import <nixpkgs> {}}: nixpkgs.fstar-package-manager.shell (import ./fstar-package.nix {nixpkgs = nixpkgs;})" > shell.nix
+    echo "{nixpkgs ? import <nixpkgs> {}}: nixpkgs.fstar-package-manager.build (import ./fstar-package.nix {nixpkgs = nixpkgs;})" > default.nix
     '');
   fstar-package-manager =
     let
-      pm = import ./package-manager.nix super;
+      pm = import ./package-manager.nix self;
     in { shell = m : super.callPackage (o: (pm o).shell) m;
          build = m : super.callPackage (o: (pm o).build) m;
        };
