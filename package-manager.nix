@@ -1,5 +1,9 @@
 pkgs@{lib, fstar, symlinkJoin, stdenv, makeWrapper, ocamlPackages, ...}:
 let
+  isDerivation = lib.isDerivation;
+  unique = lib.unique;
+  trace = builtins.trace;
+  jtrace = x: builtins.trace (builtins.toJSON x);
   default-ocaml-compile-description
   = { module = throw "compile[].module is mandatory: which F* module would you like to compile?";
       assets = [];
@@ -27,49 +31,64 @@ let
       # otherwise, use directly `force-fstar-version` as fstar
     };
 in
-module-description:
+let build-from-module-description = module-description:
 let
-  fstar-default = ((import ./default.nix) pkgs pkgs).fstar;
-  fstar-factory = (import ./factory.nix) pkgs;
-  fstar-bin = if m.force-fstar-version == false
-              then fstar
-              else
-                if m.force-fstar-version == true
-                then fstar-default
-                else
-                  if builtins.typeOf m.force-fstar-version == "lambda"
-                  then m.force-fstar-version fstar-factory 
-                  else m.force-fstar-version;
-  compute-includes = m:
-        m.includes
-     ++ lib.flatten (map compute-includes m.includes)
-  ;
-  # compute-modules = m:
-  #        m.sources
-  #    ++ lib.flatten (map compute-modules m.includes)
-  # ;
-  includes-closure = compute-includes {includes = m.dependencies;};
-  modules-closure = lib.flatten (map (m: m.sources) includes-closure) ++ m.sources; # compute-modules {sources = m.sources; includes = m.dependencies;};
+  # Constants
   odir        = "out";
   plugin-odir = odir + "/plugin";
   ocaml-odir  = odir + "/ocaml";
   extract-path        = "extract";
   plugin-extract-path = extract-path + "/plugin";
   ocaml-extract-path  = extract-path + "/ocaml";
-  translate-fst-module = builtins.replaceStrings ["."] ["_"];
   ocaml_packages = ["fstarlib" "fstar-tactics-lib" "fstar-compiler-lib"];
+
+  # Helpers
+  translate-fst-module = builtins.replaceStrings ["."] ["_"];
+  addFstExt = v:
+    if lib.hasSuffix ".fst" v || lib.hasSuffix ".fsti" v
+    then v
+    else v + ".fst"; 
   copyFile = dest: file: ''cp --no-preserve=mode ${file} ${dest}/'';
   copyMlFiles = dirIn: dirOut: 
     ''for f in ${dirIn}/*.ml; do
         ${copyFile dirOut "$f"}
     done'';
+  
   m = default-module-description (module-description.compile or [])
       // module-description // {compile = map (x: default-ocaml-compile-description // x) module-description.compile;};
+  fstar-bin = if m.force-fstar-version == false
+              then fstar
+              else
+                if m.force-fstar-version == true
+                then ((import ./default.nix) pkgs pkgs).fstar
+                else
+                  if builtins.typeOf m.force-fstar-version == "lambda"
+                  then m.force-fstar-version (import ./factory.nix pkgs)
+                  else m.force-fstar-version;
+  compute-includes = m:
+    # TODO: force-fstar-version should be overriten only if is `true` or `false`
+    let includes = (m.override (mm: mm // {force-fstar-version = m.force-fstar-version;})).includes; in
+    let includes = m.includes; in
+    includes
+     ++ lib.flatten (map compute-includes includes)
+  ;
+  includes-closure
+  = unique (compute-includes {includes = m.dependencies; override = _: {includes = m.dependencies;};});
+  modules-closure = unique (lib.flatten (map (m: m.sources) includes-closure) ++ m.sources);
   fstar-cli-lsts = include: extract: load:
+    # let
+      # load = if m.disable-native == true then [] else load;
+    # in
     builtins.concatStringsSep " " (
-      map (x: ''--include "${x}"'') include
-      ++ map (x: ''--extract "${x}"'') extract
-      ++ map (x: ''--load "${x}"'') load
+      map (x: ''--include "${x}"'') (unique include)
+      ++ map (x: ''--extract "${x}"'') (unique extract)
+      ++ map (x: ''--load "${x}"'') (
+        let
+          f = x: map (y: ''${x}/${y}'') x.tactics;
+          o = pkgs.lib.flatten (map f includes-closure);
+          in unique (load ++ o)
+      )
+      ++ m.extra-fstar-flags
     );
   fstar-cli =
     { codegen                  ? "",
@@ -103,9 +122,11 @@ let
           );
         in ''${fstar-bin}/bin/fstar.exe ${flags}'';
 all = rec {
+  sources = m.sources;
   auto = if pkgs.lib.inNixShell then shell else build;
+  the-module-clean-name =  builtins.replaceStrings ["."] ["-"] m.name;
   wrapped-fstar = (symlinkJoin {
-          name = "fstar-include-wrapper-" + m.name;
+          name = "fstar-include-wrapper-" + the-module-clean-name;
           paths = [ fstar-bin ];
           buildInputs = [ makeWrapper ];
           postBuild = (
@@ -113,23 +134,30 @@ all = rec {
           wrapProgram $out/bin/fstar.exe \
             --run "addEnvHooks(){ :; }; source ${ocamlPackages.findlib.setupHook}; addOCamlPath ${fstar-bin}" \
             --add-flags "${
-              (fstar-cli-lsts includes-closure [] [])
+               (fstar-cli-lsts includes-closure [] [])
             }"
           ln -s $out/bin/fstar.exe $out/bin/fstar.wrapped
         ''; in s); 
   });
+  module = m;
+  the-modules-closure = modules-closure;
   shell = stdenv.mkDerivation {
-    name = "fstar-shell-" + m.name;
+    modules-closure = the-modules-closure;
+    module-clean-name = the-module-clean-name;
+    name = "fstar-shell-" + the-module-clean-name;
     buildInputs = [
       wrapped-fstar
     ];
   };
   build = stdenv.mkDerivation rec {
-    name = "fstar-lib-" + m.name;
+    module-name = m.name;
+    modules-closure = the-modules-closure;
+    module-clean-name = the-module-clean-name;
+    name = "fstar-lib-" + the-module-clean-name;
     buildInputs = (
       # if lib.inNixShell
       # then
-        [ wrapped-fstar ]
+        [ wrapped-fstar pkgs.z3 pkgs.utillinux ]
     );
     nativeBuildInputs = [ fstar-bin pkgs.tree ] ++
                         ( if (  (builtins.length m.compile == 0)
@@ -140,32 +168,36 @@ all = rec {
                             [ ocaml ocamlbuild findlib ppx_deriving
                               pprint ppx_deriving_yojson zarith stdint batteries])
                         );
-    src = m.sources-directory;
+    src = lib.cleanSource m.sources-directory;
     sources = m.sources;
     includes = m.dependencies;
     buildPhase =
       (
-        let sources-modules = " " + builtins.concatStringsSep " " (map (v: v + ".fst") m.sources);
+        let sources-modules = " " + builtins.concatStringsSep " " (map addFstExt m.sources);
             # tactics-modules = " " + builtins.concatStringsSep " " (map (v: v + ".fst") m.tactics);
         in
         ''
         package_root_folder=$(pwd)
-        # OCaml setup, then folder setup
+        echo "## OCaml setup, then folder setup"
         source ${ocamlPackages.findlib.setupHook}
         addOCamlPath ${fstar-bin}
+        export OCAMLPATH="$OCAMLPATH:${fstar-bin}/bin"
+        OCAMLPATH="$OCAMLPATH:${fstar-bin}/bin"
         rm -rf ${odir} bin lib
         mkdir -p ${ocaml-odir} ${plugin-odir} bin lib
 
-        # Extract every modules as OCaml
+        echo "## Extract every modules as OCaml"
+        echo "${fstar-cli { include = includes-closure; codegen = "OCaml"; extract = m.sources; odir = ocaml-odir; } + sources-modules}"
         ${fstar-cli { include = includes-closure; codegen = "OCaml"; extract = m.sources; odir = ocaml-odir; } + sources-modules}
 
-        # Copy OCaml dependencies
+        echo "## Copy OCaml dependencies"
         ${builtins.concatStringsSep "\n" (
              map (dep: copyMlFiles (dep+"/"+ocaml-extract-path) ocaml-odir) m.dependencies # peer dependencies
           ++ map (copyFile ocaml-odir) m.ocaml-sources # raw OCaml dependencies
+          ++ map (copyFile plugin-odir) m.ocaml-sources # raw OCaml dependencies
         )}
 
-        # Compile OCaml binaries
+        echo "## Compile OCaml binaries"
         cd ${ocaml-odir}
         ${builtins.concatStringsSep "\n"
           ( map ({ module, assets, binary-name, library-name, extra-no-extract,
@@ -183,31 +215,28 @@ all = rec {
         '') m.compile)}
         cd "$package_root_folder"
         
-        # Extract & compile tactic
+        echo "## Extract & compile tactic"
         ${if m.tactic-module == null # TODO clean this awful check
           then ""
           else ''
           ${fstar-cli
             { include = includes-closure; codegen = "Plugin"
-              ; extract = modules-closure; odir = plugin-odir; } + " " + m.tactic-module + ".fst"}
+              ; extract = modules-closure; odir = plugin-odir; } + " " + addFstExt m.tactic-module}
           cd ${plugin-odir}
+          echo "################################"
+          echo "################################"
           echo "-> COMPILE TACTIC '${m.tactic-module}'"
-          tree -a
-          # cp *.ml 
-          # ocamlbuild -use-ocamlfind -cflag -g -package fstar-tactics-lib,fstar-compiler-lib ${translate-fst-module m.tactic-module}.cmxs
           ocamlbuild -use-ocamlfind -cflag -g -package fstar-tactics-lib ${translate-fst-module m.tactic-module}.cmxs
-          echo "HEY"
-          echo "HEY"
-          echo "HEY"
-          echo "HEY"
-          echo "HEY"
-          tree -a
           cp _build/${translate-fst-module m.tactic-module}.cmxs $package_root_folder
           cd "$package_root_folder"
           ''
          }
         ''
       );
+
+    tactics = if m.tactic-module == null
+              then []
+              else [''${translate-fst-module m.tactic-module}''];
     
     installPhase = (
         ''mkdir -p $out/bin $out/lib $out/${ocaml-extract-path} $out/${plugin-extract-path}
@@ -232,7 +261,7 @@ all = rec {
                     fsti = copyFile "$out/" (f+"i");
                 in ''(${fst} && (${fsti} || true)) || ${fsti}''
               )
-              (map (x: x + ".fst") m.sources))
+              (map addFstExt m.sources))
            } 
           ${builtins.concatStringsSep "\n" (map (copyFile "$out/") m.ocaml-sources)} # TODO: check if useful?
         ''
@@ -240,6 +269,7 @@ all = rec {
   };
 };
 in
-all
+all;
+    in build-from-module-description
 
 # +# ocamlbuild -use-ocamlfind -cflag -g -package fstar-tactics-lib,fstar-compiler-lib test.cmxs

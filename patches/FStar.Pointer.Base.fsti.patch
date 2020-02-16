@@ -1,0 +1,13 @@
+diff --git a/ulib/legacy/FStar.Pointer.Base.fsti b/ulib/legacy/FStar.Pointer.Base.fsti
+index 3ee1984410..333fb4a875 100644
+--- a/ulib/legacy/FStar.Pointer.Base.fsti
++++ b/ulib/legacy/FStar.Pointer.Base.fsti
+@@ -313,7 +313,7 @@ let fun_of_list
+   (requires (normalize_term (struct_literal_wf s l) == true))
+   (ensures (fun _ -> True))
+ =
+-  let f' : string = f in
++  let f' : string = admit(); f in
+   let phi (p: (x: struct_field s & type_of_struct_field s x)) : Tot bool =
+     dfst_struct_field s p = f'
+   in

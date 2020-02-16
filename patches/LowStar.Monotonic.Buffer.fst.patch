@@ -1,0 +1,14 @@
+diff --git a/ulib/LowStar.Monotonic.Buffer.fst b/ulib/LowStar.Monotonic.Buffer.fst
+index 6fb939f163..e7db6c4ea1 100644
+--- a/ulib/LowStar.Monotonic.Buffer.fst
++++ b/ulib/LowStar.Monotonic.Buffer.fst
+@@ -1602,7 +1602,8 @@ let fill' (#t:Type) (#rrel #rel: srel t)
+     Seq.slice (as_seq h1 b) 0 (U32.v len) `Seq.equal` Seq.create (U32.v len) z /\
+     Seq.slice (as_seq h1 b) (U32.v len) (length b) `Seq.equal` Seq.slice (as_seq h0 b) (U32.v len) (length b)
+   ))
+-= let open HST in
++= admit ();
++  let open HST in
+   if len = 0ul then ()
+   else begin
+     let h = get () in

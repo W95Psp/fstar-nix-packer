@@ -1,0 +1,23 @@
+diff --git a/src/typechecker/FStar.TypeChecker.Normalize.fs b/src/typechecker/FStar.TypeChecker.Normalize.fs
+index 3e8c83e023..4cd538b15d 100644
+--- a/src/typechecker/FStar.TypeChecker.Normalize.fs
++++ b/src/typechecker/FStar.TypeChecker.Normalize.fs
+@@ -2418,13 +2418,13 @@ and rebuild (cfg:cfg) (env:env) (stack:stack) (t:term) : term =
+              let steps = {
+                     cfg.steps with
+                     zeta = false;
+-                    unfold_until = None;
+-                    unfold_only = None;
+-                    unfold_attr = None;
+-                    unfold_tac = false
++                    // unfold_until = None;
++                    // unfold_only = None;
++                    // unfold_attr = None;
++                    // unfold_tac = false
+              }
+              in
+-            ({cfg with delta_level=new_delta; steps=steps; strong=true})
++            ({cfg with (* delta_level=new_delta; **) steps=steps; strong=true})
+           in
+           let norm_or_whnf env t =
+             if whnf

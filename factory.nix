@@ -1,19 +1,28 @@
 # this nix expression was stolen from https://github.com/blipp/nix-everest
 { stdenv, lib, pkgs, fetchFromGitHub, ocamlPackages, makeWrapper, z3, ... }:
-{ rev, sha256 }:
+{ rev ? null, sha256 ? null, customSrc ? null, customName ? null
+, otherPreBuildFlags ? ""
+, recompileFromSourcesUsing ? null # null or fstar existing derivation
+}:
+
 
 # TODO: continue looking here for some more details: https://nixos.org/nixpkgs/manual/#build-phase
+assert (
+     (rev != null && sha256 != null && customSrc == null)
+  || (rev == null && sha256 == null && customSrc != null)
+);
 stdenv.mkDerivation rec {
-  name = "fstar-master-${version}";
-  version = "1885fw47p-dev";
+  name = "fstar-${if customName == null then version else customName}";
+  version = if rev == null then "custom-src" else rev;
 
-  src = fetchFromGitHub {
-    owner = "FStarLang";
-    repo = "FStar";
-    rev = rev;
-    sha256 = sha256;
-    fetchSubmodules = false;
-  };
+  src = if customSrc == null
+        then fetchFromGitHub {
+          owner = "FStarLang";
+          repo = "FStar";
+          rev = rev;
+          sha256 = sha256;
+          fetchSubmodules = false;
+        } else customSrc;
   
   nativeBuildInputs = [ makeWrapper ];
 
@@ -30,7 +39,23 @@ stdenv.mkDerivation rec {
     patchShebangs src/tools
     patchShebangs bin
     patchShebangs ulib
+    ${otherPreBuildFlags}
+    ${if recompileFromSourcesUsing == null
+      then ""
+      else ''
+      cp --no-preserve=mode ${recompileFromSourcesUsing}/bin/fstar.exe ./bin/fstar.exe
+      chmod +x ./bin/fstar.exe
+      make -C src clean_extracted
+      make -C src -j6 fstar-ocaml
+      ''
+     }
   '';
+  postBuid = if recompileFromSourcesUsing == null
+    then ""
+    else ''
+         make -C ulib install-fstarlib
+         make -C ulib install-fstar-tactics
+         ''; #make -C src/ocaml-output install-compiler-lib
 
   preInstall = ''
     mkdir -p $out/lib/ocaml/${ocamlPackages.ocaml.version}/site-lib/fstarlib

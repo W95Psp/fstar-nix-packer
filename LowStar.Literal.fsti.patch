@@ -1,0 +1,17 @@
+diff --git a/ulib/LowStar.Literal.fsti b/ulib/LowStar.Literal.fsti
+index fd7a4d7e4e..20c727e445 100644
+--- a/ulib/LowStar.Literal.fsti
++++ b/ulib/LowStar.Literal.fsti
+@@ -111,10 +111,10 @@ let buf_len_of_literal (s: string):
+       normalize (List.Tot.length (String.list_of_string s) < pow2 32)))
+     (ensures (fun h0 r h1 ->
+       let b, l = r in
+-      buffer_of_literal_post s h0 b h1 /\
++      buffer_of_literal_post (admit (); s) h0 b h1 /\
+       UInt32.v l = normalize_term (List.Tot.length (String.list_of_string s)) /\
+       UInt32.v l = IB.length b))
+ =
+   [@inline_let]
+   let l = normalize_term (UInt32.uint_to_t (List.Tot.length (String.list_of_string s))) in
+-  buffer_of_literal s, l
++  buffer_of_literal (admit (); s), l

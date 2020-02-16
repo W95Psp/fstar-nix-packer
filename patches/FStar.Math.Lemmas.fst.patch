@@ -1,0 +1,12 @@
+diff --git a/ulib/FStar.Math.Lemmas.fst b/ulib/FStar.Math.Lemmas.fst
+index aa16068a4c..de8dbbb4df 100644
+--- a/ulib/FStar.Math.Lemmas.fst
++++ b/ulib/FStar.Math.Lemmas.fst
+@@ -252,6 +252,7 @@ let lt_multiple_is_equal (a:nat) (b:nat) (x:int) (n:pos) =
+ let lemma_mod_plus_0 (a:int) (b:int) (p:pos) : Lemma
+   ((a + b * p) % p - a % p = p * (b + a / p - (a + b * p) / p))
+ =
++  admit ();
+   let z: int = a + b * p in
+   lemma_div_mod a p;
+   lemma_div_mod z p

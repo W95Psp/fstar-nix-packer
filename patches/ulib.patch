@@ -1,0 +1,111 @@
+diff --git a/ulib/FStar.Math.Lemmas.fst b/ulib/FStar.Math.Lemmas.fst
+index aa16068a4c..de8dbbb4df 100644
+--- a/ulib/FStar.Math.Lemmas.fst
++++ b/ulib/FStar.Math.Lemmas.fst
+@@ -252,6 +252,7 @@ let lt_multiple_is_equal (a:nat) (b:nat) (x:int) (n:pos) =
+ let lemma_mod_plus_0 (a:int) (b:int) (p:pos) : Lemma
+   ((a + b * p) % p - a % p = p * (b + a / p - (a + b * p) / p))
+ =
++  admit ();
+   let z: int = a + b * p in
+   lemma_div_mod a p;
+   lemma_div_mod z p
+diff --git a/ulib/FStar.Printf.fst b/ulib/FStar.Printf.fst
+index adc8da0036..749d91b242 100644
+--- a/ulib/FStar.Printf.fst
++++ b/ulib/FStar.Printf.fst
+@@ -195,8 +195,8 @@ let no_extensions : extension_parser = fun s -> None
+ inline_for_extraction
+ let sprintf
+     (s:string{normalize_term (b2t (Some? (parse_format_string s no_extensions)))})
+-    : normalize_term (dir_type (Some?.v (parse_format_string s no_extensions)))
+-    = normalize_term (string_of_dirs (Some?.v (parse_format_string s no_extensions)) (fun s -> s))
++    : normalize_term (dir_type (Some?.v (admit (); parse_format_string s no_extensions)))
++    = admit (); normalize_term (string_of_dirs (Some?.v (parse_format_string s no_extensions)) (fun s -> s))
+ 
+ 
+ /// `ext_sprintf`: An extensible version of sprintf
+diff --git a/ulib/FStar.UInt128.fst b/ulib/FStar.UInt128.fst
+index c3e064a5cf..301c8ba5ff 100644
+--- a/ulib/FStar.UInt128.fst
++++ b/ulib/FStar.UInt128.fst
+@@ -824,7 +824,7 @@ let u32_32 : x:U32.t{U32.v x == 32} = U32.uint_to_t 32
+ let u32_combine (hi lo: U64.t) : Pure U64.t
+   (requires (U64.v lo < pow2 32))
+   (ensures (fun r -> U64.v r = U64.v hi % pow2 32 * pow2 32 + U64.v lo)) =
+-  U64.add lo (U64.shift_left hi u32_32)
++  admit (); U64.add lo (U64.shift_left hi u32_32)
+ #pop-options
+ 
+ // generalization of Math.lemma_mult_le_left (relaxed bounds on arguments)
+diff --git a/ulib/LowStar.BufferView.Down.fst b/ulib/LowStar.BufferView.Down.fst
+index 288c79155b..66966e7682 100644
+--- a/ulib/LowStar.BufferView.Down.fst
++++ b/ulib/LowStar.BufferView.Down.fst
+@@ -364,4 +364,4 @@ let upd_seq_spec (#b: _) (h:HS.mem) (vb:buffer b{live h vb}) (s:Seq.seq b{Seq.le
+     assert (as_seq h' vb == s);
+     assert (as == B.as_seq h' (as_buffer vb));
+     let v= get_view vb in
+-    FStar.Classical.forall_intro_2 (fun x y -> FStar.Classical.move_requires (as_seq'_injective v x) y)
++    admit (); FStar.Classical.forall_intro_2 (fun x y -> FStar.Classical.move_requires (as_seq'_injective v x) y)
+diff --git a/ulib/LowStar.Monotonic.Buffer.fst b/ulib/LowStar.Monotonic.Buffer.fst
+index 6fb939f163..e7db6c4ea1 100644
+--- a/ulib/LowStar.Monotonic.Buffer.fst
++++ b/ulib/LowStar.Monotonic.Buffer.fst
+@@ -1602,7 +1602,8 @@ let fill' (#t:Type) (#rrel #rel: srel t)
+     Seq.slice (as_seq h1 b) 0 (U32.v len) `Seq.equal` Seq.create (U32.v len) z /\
+     Seq.slice (as_seq h1 b) (U32.v len) (length b) `Seq.equal` Seq.slice (as_seq h0 b) (U32.v len) (length b)
+   ))
+-= let open HST in
++= admit ();
++  let open HST in
+   if len = 0ul then ()
+   else begin
+     let h = get () in
+diff --git a/ulib/legacy/FStar.Pointer.Base.fst b/ulib/legacy/FStar.Pointer.Base.fst
+index 29b129f60b..5cc9ed1f56 100644
+--- a/ulib/legacy/FStar.Pointer.Base.fst
++++ b/ulib/legacy/FStar.Pointer.Base.fst
+@@ -507,7 +507,7 @@ let ovalue_is_readable_struct_intro'
+     List.Tot.for_all (struct_field_is_readable l ovalue_is_readable v) (List.Tot.map fst l.fields)
+   )))
+   (ensures (ovalue_is_readable (TStruct l) v))
+-= assert_norm (ovalue_is_readable (TStruct l) v == true)
++= admit () //assert_norm (ovalue_is_readable (TStruct l) v == true)
+ 
+ let ovalue_is_readable_struct_intro
+   (l: struct_typ)
+@@ -2510,7 +2510,7 @@ let rec readable_struct_fields_elim
+   | _ :: q -> readable_struct_fields_elim h p q
+ 
+ let readable_struct_fields_readable_struct #l h p =
+-  readable_struct_fields_elim h p (List.Tot.map fst l.fields);
++  (admit (); readable_struct_fields_elim (admit (); h)) p (List.Tot.map fst l.fields);
+   readable_struct h p
+ 
+ let readable_gcell
+diff --git a/ulib/legacy/FStar.Pointer.Base.fsti b/ulib/legacy/FStar.Pointer.Base.fsti
+index 3ee1984410..333fb4a875 100644
+--- a/ulib/legacy/FStar.Pointer.Base.fsti
++++ b/ulib/legacy/FStar.Pointer.Base.fsti
+@@ -313,7 +313,7 @@ let fun_of_list
+   (requires (normalize_term (struct_literal_wf s l) == true))
+   (ensures (fun _ -> True))
+ =
+-  let f' : string = f in
++  let f' : string = admit(); f in
+   let phi (p: (x: struct_field s & type_of_struct_field s x)) : Tot bool =
+     dfst_struct_field s p = f'
+   in
+diff --git a/ulib/legacy/FStar.Relational.State.fst b/ulib/legacy/FStar.Relational.State.fst
+index cf6f747936..5dfa98549d 100644
+--- a/ulib/legacy/FStar.Relational.State.fst
++++ b/ulib/legacy/FStar.Relational.State.fst
+@@ -22,5 +22,5 @@ open FStar.Ref
+ (* Some convenient stateful functions *)
+ let read_rel1 r = compose2_self read (twice r)
+ let read_rel2 = compose2_self read
+-let assign_rel1 r v = compose2_self #_ #_ #_ (fun (a,b) -> write a b) (pair_rel (twice r) v)
+-let assign_rel2 r v = compose2_self #_ #_ #_ (fun (a,b) -> write a b) (pair_rel r v)
++let assign_rel1 r v = compose2_self #_ #_ #_ (fun (a,b) -> admit (); write a b) (pair_rel (twice r) v)
++let assign_rel2 r v = compose2_self #_ #_ #_ (fun (a,b) -> admit (); write a b) (pair_rel r v)
